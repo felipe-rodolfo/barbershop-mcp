@@ -1,2 +1,3 @@
-// MCP Server for Barbershop
-// Entry point - to be implemented
+import {server} from "./server.js";
+
+console.log("MCP Server started", server)
