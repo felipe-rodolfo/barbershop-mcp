@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {z} from "zod";
 import { getHaircuts } from "./tools/getHaircuts.js";
 import { getTimeSlot } from "./tools/getTimeSlot.js";
+import { createAppointment } from "./tools/createAppointment.js";
 
 const server = new McpServer({
     name: 'babershop-mcp',
@@ -43,6 +44,27 @@ server.registerTool(
         };
     }
 );
+
+server.registerTool(
+    'createAppointment',
+    {
+        title: 'Create Appointment',
+        description: 'Create a new appoint at the barbershop',
+        inputSchema: {
+            barbershop_id: z.number().describe("The barbershop ID"),
+            haircut_id: z.number().describe("The haircut ID"),
+            time_slot_id: z.number().describe("The time slot ID"),
+            customer_name: z.string().describe("Customer name"),
+            customer_phone: z.string().describe("Customer phone"),
+        }
+    },
+    async ({ barbershop_id, haircut_id, time_slot_id, customer_name, customer_phone}) => {
+        const result = createAppointment( barbershop_id, haircut_id, time_slot_id, customer_name, customer_phone);
+        return {
+            content: [{type: "text", text: JSON.stringify(result)}]
+        }
+    }
+)
 
 async function startServer() {
     const transport = new StdioServerTransport();

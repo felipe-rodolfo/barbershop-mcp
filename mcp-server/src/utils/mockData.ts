@@ -37,4 +37,6 @@ const timeSlotMock = [
     },
 ]
 
+const appointmentsMock: any[] = [];
+
 export {hairCutsMock, timeSlotMock};
