@@ -1,9 +1,16 @@
+import express from "express";
+import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {z} from "zod";
 import { getHaircuts } from "./tools/getHaircuts.js";
 import { getTimeSlot } from "./tools/getTimeSlot.js";
 import { createAppointment } from "./tools/createAppointment.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+
+const app = express();
+app.use(express.json());
+app.use(cors());
 
 const server = new McpServer({
     name: 'babershop-mcp',
@@ -66,11 +73,21 @@ server.registerTool(
     }
 )
 
-async function startServer() {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-}
+app.post('/mcp', async(req, res) => {
+    const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+    })
+    res.on("close", () => transport.close());
 
-startServer();
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+});
+
+app.listen(3000, () => {
+    console.log("MCP Server running on http://localhost:3000/mcp")
+})
+
 
 export {server};
+
