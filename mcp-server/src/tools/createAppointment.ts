@@ -1,33 +1,32 @@
-import { timeSlotMock } from "../utils/mockData.js";
+import { callLaravelAPI } from "../utils/api-client.js";
 
-function createAppointment(
+async function createAppointment(
     barbershop_id: number, 
     haircut_id: number, 
     time_slot_id: number, 
     customer_name: string, 
     customer_phone: string
 ) {
-
-    const timeSlot = timeSlotMock.find(slot => slot.id === time_slot_id);
-    if(!timeSlot) {
-        throw new Error("Time slot not found");
+    if(!barbershop_id || !haircut_id || !time_slot_id || !customer_name || !customer_phone) {
+        throw new Error("All fields are required");
     }
 
-    if(!timeSlot.available) {
-        throw new Error("Time slot not available");
+    try {
+        const appointment = await callLaravelAPI("/appointments", {
+            method: "POST",
+            body: JSON.stringify({
+                barbershop_id,
+                haircut_id,
+                time_slot_id,
+                customer_name,
+                customer_phone,
+            }),
+        });
+
+        return appointment;
+    } catch (error) {
+        throw new Error("Failed to create appointment");
     }
-
-    const appointment = {
-        id: Date.now(),
-        barbershop_id,
-        haircut_id,
-        time_slot_id,
-        customer_name,
-        customer_phone,
-        created_at: new Date().toISOString()
-    };
-
-    return appointment;
 }
 
-export { createAppointment }
+export { createAppointment };
