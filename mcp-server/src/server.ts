@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,10 +28,16 @@ server.registerTool(
         }
     },
     async ({ barbershop_id}) => {
-        const result = getHaircuts(barbershop_id);
-        return {
-            content: [{type: "text", text: JSON.stringify(result)}]
-        };
+       try {
+            const result = await getHaircuts(barbershop_id);
+            return {
+                content: [{type: "text", text: JSON.stringify(result)}]
+            };
+        } catch (error) {
+            return {
+                content: [{type: "text", text: `Erro: ${error instanceof Error ? error.message : String(error)}`}]
+            };
+        }
     }
 );
 
@@ -45,7 +52,7 @@ server.registerTool(
         }
     },
     async ({barbershop_id, date}) => {
-        const result = getTimeSlot(barbershop_id, date);
+        const result = await getTimeSlot(barbershop_id, date);
         return {
             content: [{type: "text", text: JSON.stringify(result)}]
         };
@@ -66,7 +73,7 @@ server.registerTool(
         }
     },
     async ({ barbershop_id, haircut_id, time_slot_id, customer_name, customer_phone}) => {
-        const result = createAppointment( barbershop_id, haircut_id, time_slot_id, customer_name, customer_phone);
+        const result = await createAppointment( barbershop_id, haircut_id, time_slot_id, customer_name, customer_phone);
         return {
             content: [{type: "text", text: JSON.stringify(result)}]
         }

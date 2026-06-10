@@ -100,7 +100,7 @@ async function callMCPTool(
   const result = await response.json();
 
   if (result.error) {
-    console.error(`❌ Erro ao chamar tool: ${result.error.message}`);
+    console.error(` Erro ao chamar tool: ${result.error.message}`);
     return `Erro: ${result.error.message}`;
   }
 
@@ -139,7 +139,7 @@ async function main() {
     const claudeTools = convertToolsToClaudeFormat(mcpTools);
 
     const userMessage =
-      "Eu quero agendar um corte de cabelo. Qual é o corte mais popular? E qual é o horário disponível para 2026-06-06?";
+      "Eu quero agendar um corte de cabelo na barbearia 1. Qual é o corte mais popular? E qual é o horário disponível para 2026-06-06?";
 
     console.log(`\n Enviando para Claude: "${userMessage}"\n`);
 
@@ -170,7 +170,12 @@ async function main() {
       const toolName = toolUseBlock.name;
       const toolInput = toolUseBlock.input as Record<string, unknown>;
 
-      const toolResult = await callMCPTool(toolName, toolInput);
+      let toolResult: string;
+      try {
+          toolResult = await callMCPTool(toolName, toolInput);
+      } catch (error) {
+          toolResult = `Erro ao executar tool: ${error instanceof Error ? error.message : String(error)}`;
+      }
 
       messages.push({ role: "assistant", content: response.content });
       messages.push({
