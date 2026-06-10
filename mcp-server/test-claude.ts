@@ -150,7 +150,7 @@ async function main() {
     console.log(JSON.stringify(claudeTools, null, 2));
 
     let response = await client.messages.create({
-      model: "claude-opus-4-6",
+      model: "claude-opus-4-8",
       max_tokens: 1024,
       tools: claudeTools,
       messages: messages,
@@ -159,38 +159,43 @@ async function main() {
     console.log(" Resposta inicial de Claude:");
 
     while (response.stop_reason === "tool_use") {
-      const toolUseBlock = response.content.find(
+      const toolUseBlocks = response.content.filter(
         (block) => block.type === "tool_use"
       );
 
-      if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
+      if (toolUseBlocks.length === 0) {
         break;
       }
 
-      const toolName = toolUseBlock.name;
-      const toolInput = toolUseBlock.input as Record<string, unknown>;
+      messages.push({ role: "assistant", content: response.content });
 
-      let toolResult: string;
-      try {
+      const toolResultBlocks: Anthropic.ToolResultBlockParam[] = [];
+
+      for (const toolUseBlock of toolUseBlocks) {
+        const toolName = toolUseBlock.name;
+        const toolInput = toolUseBlock.input as Record<string, unknown>;
+
+        let toolResult: string;
+        try {
           toolResult = await callMCPTool(toolName, toolInput);
-      } catch (error) {
+        } catch (error) {
           toolResult = `Erro ao executar tool: ${error instanceof Error ? error.message : String(error)}`;
+        }
+
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: toolUseBlock.id,
+          content: toolResult,
+        });
       }
 
-      messages.push({ role: "assistant", content: response.content });
       messages.push({
         role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: toolUseBlock.id,
-            content: toolResult,
-          },
-        ],
+        content: toolResultBlocks,
       });
 
       response = await client.messages.create({
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-opus-4-8",
         max_tokens: 1024,
         tools: claudeTools,
         messages: messages,

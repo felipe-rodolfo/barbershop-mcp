@@ -1,11 +1,16 @@
 import "dotenv/config";
+
 import express from "express";
+
 import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {z} from "zod";
 import { getHaircuts } from "./tools/getHaircuts.js";
+
 import { getTimeSlot } from "./tools/getTimeSlot.js";
+
 import { createAppointment } from "./tools/createAppointment.js";
+
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 
@@ -28,12 +33,16 @@ server.registerTool(
         }
     },
     async ({ barbershop_id}) => {
+       
        try {
+            
             const result = await getHaircuts(barbershop_id);
+            
             return {
                 content: [{type: "text", text: JSON.stringify(result)}]
             };
         } catch (error) {
+            console.error("🔴 TOOL HANDLER: ERRO =", error);
             return {
                 content: [{type: "text", text: `Erro: ${error instanceof Error ? error.message : String(error)}`}]
             };
@@ -91,9 +100,12 @@ app.post('/mcp', async(req, res) => {
     await transport.handleRequest(req, res, req.body);
 });
 
+
+
 app.listen(3000, () => {
-    console.log("MCP Server running on http://localhost:3000/mcp")
+    console.log("App running...")
 })
+
 
 
 export {server};

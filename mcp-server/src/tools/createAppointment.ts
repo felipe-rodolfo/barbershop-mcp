@@ -1,3 +1,4 @@
+import "dotenv/config"; 
 import { callLaravelAPI } from "../utils/api-client.js";
 
 async function createAppointment(
