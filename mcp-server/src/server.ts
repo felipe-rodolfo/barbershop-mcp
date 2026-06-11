@@ -8,6 +8,7 @@ import { getTimeSlot } from "./tools/getTimeSlot.js";
 import { createAppointment } from "./tools/createAppointment.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { processChat } from "./chat-handler.js";
+import { cancellationPolicyResource } from "./resources/cancellation-policy.js";
 
 const app = express();
 app.use(express.json());
@@ -86,6 +87,25 @@ server.registerTool(
             content: [{type: "text", text: JSON.stringify(result)}]
         }
     }
+)
+
+server.registerResource(
+    "cancellationPolicy",
+    cancellationPolicyResource.uri,
+    {
+        title: cancellationPolicyResource.name,
+        description: cancellationPolicyResource.description,
+        mimeType: cancellationPolicyResource.mimeType,
+    },
+    async (uri) => ({
+        contents: [
+            {
+                uri: uri.href,
+                mimeType: cancellationPolicyResource.mimeType,
+                text: cancellationPolicyResource.content,
+            }
+        ]
+    })   
 )
 
 app.post('/mcp', async(req, res) => {

@@ -21,6 +21,25 @@ interface MCPResponse {
   error?: any;
 }
 
+interface MCPResourceResponse {
+  jsonrpc: string;
+  id: number;
+  result?: {
+    resources?: Array<{
+      uri: string;
+      name: string;
+      description?: string;
+      mimeType?: string;
+    }>;
+    contents?: Array<{
+      uri: string;
+      mimeType?: string;
+      text?: string;
+    }>;
+  };
+  error?: any;
+}
+
 async function getMCPTools(): Promise<
   Array<{ name: string; description: string; inputSchema: any }>
 > {
@@ -60,6 +79,70 @@ async function getMCPTools(): Promise<
 
   const listData = (await listResponse.json()) as MCPResponse;
   return listData.result?.tools || [];
+}
+
+async function getMCPResourcesContext(): Promise<string> {
+  await fetch(MCP_SERVER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "barbershop-chat", version: "1.0.0" },
+      },
+    }),
+  });
+
+  const listResponse = await fetch(MCP_SERVER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "resources/list",
+      params: {},
+    }),
+  });
+
+  const listData = (await listResponse.json()) as MCPResourceResponse;
+  const resources = listData.result?.resources || [];
+
+  const sections: string[] = [];
+
+  for (const resource of resources) {
+    const readResponse = await fetch(MCP_SERVER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/read",
+        params: { uri: resource.uri },
+      }),
+    });
+
+    const readData = (await readResponse.json()) as MCPResourceResponse;
+    const text = readData.result?.contents?.[0]?.text;
+
+    if (text) {
+      sections.push(`## ${resource.name}\n\n${text}`);
+    }
+  }
+
+  return sections.join("\n\n");
 }
 
 async function callMCPTool(
@@ -118,6 +201,11 @@ export async function processChat(userMessage: string): Promise<string> {
 
     const claudeTools = convertToolsToClaudeFormat(mcpTools);
 
+    const resourcesContext = await getMCPResourcesContext();
+    const systemPrompt = resourcesContext
+      ? `Você é um assistente virtual de uma barbearia. Use as informações de referência abaixo quando forem relevantes para responder ao usuário.\n\n${resourcesContext}`
+      : undefined;
+
     const messages: Anthropic.MessageParam[] = [
       { role: "user", content: userMessage },
     ];
@@ -125,6 +213,7 @@ export async function processChat(userMessage: string): Promise<string> {
     let response = await client.messages.create({
       model: "claude-opus-4-8",
       max_tokens: 1024,
+      system: systemPrompt,
       tools: claudeTools,
       messages: messages,
     });
@@ -168,6 +257,7 @@ export async function processChat(userMessage: string): Promise<string> {
       response = await client.messages.create({
         model: "claude-opus-4-8",
         max_tokens: 1024,
+        system: systemPrompt,
         tools: claudeTools,
         messages: messages,
       });
