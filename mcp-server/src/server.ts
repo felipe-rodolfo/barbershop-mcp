@@ -1,22 +1,21 @@
 import "dotenv/config";
-
 import express from "express";
-
 import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {z} from "zod";
 import { getHaircuts } from "./tools/getHaircuts.js";
-
 import { getTimeSlot } from "./tools/getTimeSlot.js";
-
 import { createAppointment } from "./tools/createAppointment.js";
-
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-
+import { processChat } from "./chat-handler.js";
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+}));
 
 const server = new McpServer({
     name: 'babershop-mcp',
@@ -100,7 +99,24 @@ app.post('/mcp', async(req, res) => {
     await transport.handleRequest(req, res, req.body);
 });
 
+app.post('/chat', async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        if (!message || typeof message !== 'string') {
+            return res.status(400).json({ error: 'Message is required' });
+        }
 
+        const response = await processChat(message);
+        res.json({ response });
+    } catch (error) {
+        console.error('Chat error:', error);
+        res.status(500).json({ 
+            error: 'Failed to process message',
+            details: error instanceof Error ? error.message : String(error)
+        });
+    }
+});
 
 app.listen(3000, () => {
     console.log("App running...")
