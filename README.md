@@ -13,8 +13,9 @@ O projeto implementa um **chatbot inteligente de atendimento para barbearias** q
 - ✅ Consulta horários disponíveis para uma data
 - ✅ Cria um novo agendamento
 - ✅ Responde em linguagem natural com base nesses dados
+- ✅ Usa políticas e informações da barbearia (ex: cancelamento) como contexto via **MCP Resources**
 
-Funciona através de um **MCP Server** que atua como intermediário entre Claude e a API da barbearia, expondo um conjunto de **Tools** que o modelo pode chamar de forma padronizada (protocolo MCP via JSON-RPC).
+Funciona através de um **MCP Server** que atua como intermediário entre Claude e a API da barbearia, expondo **Tools** e **Resources** que o modelo pode usar de forma padronizada (protocolo MCP via JSON-RPC). Um chat web em React consome esse MCP Server através de um endpoint HTTP dedicado (`/chat`).
 
 ---
 
@@ -24,37 +25,43 @@ Funciona através de um **MCP Server** que atua como intermediário entre Claude
 |---|---|
 | API Laravel (`/api/v1/...`) | ✅ Funcionando |
 | MCP Server (3 tools) | ✅ Funcionando |
-| Demo via CLI (Claude + MCP) | ✅ Funcionando (`test-claude.ts`) |
+| MCP Resources (política de cancelamento) | ✅ Funcionando |
+| Endpoint de chat (`/chat`, Claude + MCP) | ✅ Funcionando |
 | Frontend (chat web) | ✅ Funcionando (`frontend`) |
-| MCP Resources | 🚧 Planejado, ainda não implementado |
-| Documentação adicional (`docs/`) | 🚧 Planejado |
+| Demo via CLI (Claude + MCP) | ✅ Funcionando (`test-claude.ts`) |
+| Documentação adicional (`docs/`) | 🚧 Em andamento ([`docs/architecture.md`](docs/architecture.md)) |
 
-> Hoje a forma de "ver o projeto rodando" é via [`mcp-server/test-claude.ts`](mcp-server/test-claude.ts) — um script CLI que conecta ao MCP Server, repassa as tools para o Claude e executa o ciclo completo de tool-use. Veja o passo 4 do Quick Start.
+> A forma mais simples de "ver o projeto rodando" é via o [chat web em `frontend/`](frontend) — uma interface React que conversa com o endpoint `/chat` do MCP Server. Também é possível rodar [`mcp-server/test-claude.ts`](mcp-server/test-claude.ts), um script CLI que conecta diretamente ao MCP Server via protocolo MCP. Veja os passos 4 e 5 do Quick Start.
 
 ---
 
 ## 🏗️ Arquitetura
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Claude API                          │
-│            (Anthropic - Nuvem)                       │
-└────────────────────┬──────────────────────────────────┘
-                      │
-             HTTP Transport (JSON-RPC / MCP)
-                      │
-┌─────────────────────▼─────────────────────────────────┐
-│          MCP Server (Node.js + TypeScript)            │
-│  • Tools: getHaircuts, getTimeSlot, createAppointment │
-└─────────────────────┬─────────────────────────────────┘
-                       │ HTTP API (/api/v1)
-                       │
-┌──────────────────────▼────────────────────────────────┐
-│      Laravel API                                       │
-│  • Barbershops, Haircuts, TimeSlots, Appointments     │
-│  • SQLite (dev)                                        │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────┐      ┌─────────────────────────────────┐
+│   Frontend (React + Vite)   │      │        test-claude.ts            │
+│   Chat web (Tailwind)       │      │   Demo CLI (cliente MCP direto)  │
+└──────────────┬───────────────┘      └────────────────┬──────────────────┘
+               │ HTTP POST /chat                       │ JSON-RPC / MCP
+               │                                        │
+┌──────────────▼────────────────────────────────────────▼──────────────┐
+│                  MCP Server (Node.js + TypeScript)                    │
+│  • /chat        → chat-handler.ts orquestra Claude + tools/resources  │
+│  • /mcp         → endpoint MCP (JSON-RPC)                             │
+│  • Tools:     getHaircuts, getTimeSlot, createAppointment             │
+│  • Resources: cancellationPolicy (política de cancelamento)           │
+└───────────────┬─────────────────────────────────────┬─────────────────┘
+                 │ Anthropic SDK                       │ HTTP API (/api/v1)
+                 │                                      │
+┌────────────────▼─────────────────┐      ┌─────────────▼───────────────────┐
+│            Claude API             │      │           Laravel API            │
+│        (Anthropic - Nuvem)        │      │  Barbershops, Haircuts,          │
+│                                    │      │  TimeSlots, Appointments         │
+│                                    │      │  SQLite (dev)                    │
+└────────────────────────────────────┘      └───────────────────────────────────┘
 ```
+
+> Detalhes do fluxo completo (chat web vs. demo CLI, e como os MCP Resources são injetados no contexto do Claude) em [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
@@ -87,11 +94,14 @@ barbershop-mcp/
 ├── mcp-server/
 │   ├── src/
 │   │   ├── index.ts                    # entrada do MCP Server
-│   │   ├── server.ts                   # registro das tools MCP
+│   │   ├── server.ts                   # registro das tools/resources MCP, rotas /mcp e /chat
+│   │   ├── chat-handler.ts             # orquestra Claude + MCP para o endpoint /chat
 │   │   ├── tools/
 │   │   │   ├── getHaircuts.ts
 │   │   │   ├── getTimeSlot.ts
 │   │   │   └── createAppointment.ts
+│   │   ├── resources/
+│   │   │   └── cancellation-policy.ts  # MCP Resource: política de cancelamento
 │   │   └── utils/
 │   │       └── api-client.ts           # cliente HTTP para a API Laravel
 │   ├── test-claude.ts                  # demo CLI: Claude + MCP Server
@@ -99,7 +109,17 @@ barbershop-mcp/
 │   ├── tsconfig.json
 │   └── .env.example
 │
-├── docs/                                # planejado
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   └── Chat.jsx                # UI de chat, consome POST /chat
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── vite.config.js
+│
+├── docs/
+│   └── architecture.md                 # fluxos de chat e MCP Resources em detalhe
 ├── .gitignore
 └── README.md
 ```
@@ -144,7 +164,16 @@ npm run dev
 ```
 O MCP Server ficará disponível em `http://localhost:3000/mcp`.
 
-### 4. Rodar a demo (Claude + MCP)
+### 4. Setup do Frontend (chat web)
+Com o backend (passo 2) e o MCP Server (passo 3) rodando, em um novo terminal:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+O frontend ficará disponível em `http://localhost:5173` e já está configurado para conversar com o MCP Server em `http://localhost:3000/chat`.
+
+### 5. (Alternativo) Rodar a demo via CLI (Claude + MCP)
 Com o backend (passo 2) e o MCP Server (passo 3) rodando, em um novo terminal:
 ```bash
 cd mcp-server
